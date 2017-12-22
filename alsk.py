@@ -1,7 +1,5 @@
-import glob
 import datetime
 import h5py
-import matplotlib.pyplot as plt
 import matplotlib.colors as colors # s
 from numba import jit, vectorize
 import numpy as np
@@ -9,7 +7,6 @@ import os
 from PIL import Image as pilmg
 from Pysolar import solar as ps
 import scipy.misc
-import sys
 
 # ----------------------------------------------------------------------------
 # Functions which can be compiled with numba.jit. It is faster than another

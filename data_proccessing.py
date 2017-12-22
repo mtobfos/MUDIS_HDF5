@@ -6,7 +6,7 @@ import scipy
 from scipy import signal
 
 
-# hola, probando git banrch
+# hola, probando git branch
 # -----------------------------------------------------------------------------
 # Analysis functions
 # -----------------------------------------------------------------------------
@@ -125,7 +125,7 @@ def radiance_plot(dataset, config, wave=400, time_indx=0, levels=20, vmax='defau
     #zi = scipy.interpolate.griddata((azimuths, zeniths), z, (thetai, ri),
     #                                method='linear')
 
-    rbf = scipy.interpolate.Rbf(azimuths, zeniths, z, fucntion='gaussian',
+    rbf = scipy.interpolate.Rbf(azimuths, zeniths, z, function='gaussian',
                                 epsilon=0.05)
 
     ZI = rbf(thetai, ri)
@@ -147,7 +147,7 @@ def radiance_plot(dataset, config, wave=400, time_indx=0, levels=20, vmax='defau
     cmap = 'Spectral_r'  # 'rainbow'
     a = plt.contourf(thetai, ri, ZI, levels, cmap=cmap, vmin=0, vmax=vmax)  #  , vmax=4932)
     plt.title('{} UTC {}nm'.format(name, wave))
-    plt.axis([0, 4200, 0, 1.48])
+    plt.axis([0, 4200, 0, 1.48]) # [0, 2 * np.pi, 0, 1.48 ]
 
     plt.scatter(azimuths, zeniths, cmap=cmap, s=1)
     ax.grid(False)
