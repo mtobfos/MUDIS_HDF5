@@ -8,6 +8,26 @@ import os
 import xarray as xr
 import scipy.interpolate
 
+# ---------- ARRANGE FUNCTIONS------------
+
+def create_str_dir(config):
+    """Create the structured file directory in the path defined in the parameter
+    str_dir"""
+
+    # radiance directory
+    os.makedirs(os.path.dirname(config['str_dir'] + 'radiance/'), exist_ok=True)
+    # allsky images directory
+    os.makedirs(os.path.dirname(config['str_dir'] + 'allsky/'), exist_ok=True)
+    # simulation directory
+    os.makedirs(os.path.dirname(config['str_dir'] + 'simulation/'), exist_ok=True)
+
+
+def configuration(config):
+    """ Apply all configurations for the analysis"""
+    create_str_dir(config)
+    config['']
+
+
 
 def dat2hdf5_mudis(alignment, config, files, date='', init_file=0,
                    fin_file=100, step=1, expo='100'):
@@ -27,7 +47,7 @@ def dat2hdf5_mudis(alignment, config, files, date='', init_file=0,
     # --------SKYMAP--------------
     # Create the directory to save the results
     os.makedirs(
-        os.path.dirname(config['path_MUDIS_hdf']+ 'calibration_files/'), exist_ok=True)
+        os.path.dirname(config['path_MUDIS_hdf'] + 'calibration_files/'), exist_ok=True)
 
     # Extract skymap from alignment file
     skymap = np.zeros([len(alignment), 2])
@@ -62,7 +82,7 @@ def dat2hdf5_mudis(alignment, config, files, date='', init_file=0,
                 data[i] = file[:, int(
                     alignment.iloc[i][3] + config['channel_pixel_adj'])]  #
                 # read the pixels index
-                # in the aligment file and copy the
+                # in the alignment file and copy the
                 # data in the radiance matrix']))
 
         # Correct time for the file UTC
@@ -73,7 +93,7 @@ def dat2hdf5_mudis(alignment, config, files, date='', init_file=0,
         # convert time to datetime format
         time = datetime.datetime.strptime(time, '%d.%m.%Y_%H_%M_%S')
         # print(time)
-        new_name = datetime.datetime.strftime(time, format='%Y%m%d_%H%M%S')
+        new_name = datetime.datetime.strftime(time, fmt='%Y%m%d_%H%M%S')
 
         with open(files[fil], 'r') as file:
             dat = file.readlines()
@@ -146,6 +166,7 @@ def loadhdf5file(file_h5, key='data'):
 
 
 class DataArray:
+    """ Create a Dataset with the files selected in the parameters"""
 
     def __init__(self, files_h5, config, init_file, fin_file, step):
         self.files_h5 = files_h5
@@ -417,13 +438,13 @@ def simulate_UVSPEC(file, config):
         file.writelines(data)
 
     # Create the directory to save the results
-    os.makedirs(os.path.dirname(config['dir_sim'] + '{}/{}nm/'.format(time_n[0:8],
+    os.makedirs(os.path.dirname(config['simulations'] + '{}/{}nm/'.format(time_n[0:8],
                                                               wavelength)),
                 exist_ok=True)
 
     # Run the program UVSPEC in the terminal
     os.system(config['UVSPEC_path'] + 'uvspec < ' + config['personal_libraries_path'] +
-              'MUDIS_HDF5/MUDIS_radiance_Input.txt>   ' + config['dir_sim'] + '{}/{}nm/'.format(time_n[0:8], wavelength) + time_n +
+              'MUDIS_HDF5/MUDIS_radiance_Input.txt>   ' + config['simulations'] + '{}/{}nm/'.format(time_n[0:8], wavelength) + time_n +
               '.txt')
 
 
