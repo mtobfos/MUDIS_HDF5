@@ -13,10 +13,10 @@ aerosol_visibility 16    # Sichtweite in km
 albedo 0.2              # Surface albedo
 altitude 0.065           # Station altitude
 day_of_year 131  
-wavelength  300   300  #  wavelength to calcule [nm] 
+wavelength  500   500  #  wavelength to calcule [nm] 
 
-sza  34.803       # Solar zenith angle 
-phi0  191.477      #Azimuth angle with zenith position 
+sza  55.352       # Solar zenith angle 
+phi0  106.415      #Azimuth angle with zenith position 
 
 mol_modify O3 351. DU  # Ozone value
 
