@@ -3,6 +3,7 @@ import glob
 import h5py
 import matplotlib.pyplot as plt
 import netCDF4 as nc
+from numba import jit 
 import numpy as np
 import pandas as pd
 from Pysolar import solar as ps
@@ -86,8 +87,22 @@ def nc_to_hdf5_mudis(config):
             datos.close()
 
 
-def txt2hdf5_mudis(config, init_file=0,
-                   final_file=100, step=1, expo='100'):
+def add_align():
+    """Read alignment file in the configuration folder"""
+    
+    try:
+        alignment = pd.read_table(cwd + '/config_files/Alignment_Lab_UV_20120822.dat',
+        sep='\s+',
+        names=['Channel Number', 'Azimuth', 'Zenith', 'pixel', 'pixel',
+               'pixel'], skiprows=1)
+    except ValueError:
+        print("Add alignment file in folder '~./config_files/'. The alignment file\n"
+              "must beginning with 'Alignment_' ")
+
+    return alignment
+
+
+def txt2hdf5_mudis(config, init_file=0, final_file=100, step=1, expo='100'):
 
     """Convert raw data from MUDIS .txt file to hdf5 file with
     attributes.
@@ -99,17 +114,9 @@ def txt2hdf5_mudis(config, init_file=0,
      """
     # --------SKYMAP--------------
     # Create the directory to save the results
-    os.makedirs(
-        os.path.dirname(cwd + '/config_files/'), exist_ok=True)
+    os.makedirs(os.path.dirname(cwd + '/config_files/'), exist_ok=True)
 
-    try:
-        alignment = pd.read_table(cwd + '/config_files/Alignment_Lab_UV_20120822.dat',
-        sep='\s+',
-        names=['Channel Number', 'Azimuth', 'Zenith', 'pixel', 'pixel',
-               'pixel'], skiprows=1)
-    except ValueError:
-        print("Add alignment file in folder '~./config_files/'. The alignment file\n"
-              "must beginning with 'Alignment_' ")
+    alignment = add_align()
 
     # Extract skymap from alignment file
     skymap = np.zeros((len(alignment), 2))
@@ -136,7 +143,7 @@ def txt2hdf5_mudis(config, init_file=0,
 
     # Import the radiance data from sensor
     files = sorted(
-        glob.glob(config['raw_dir'] + 'radiance/{}/data/data_*.txt'.format(config['date'])))
+        glob.glob(config['raw_dir'] + '/radiance/{}/data/data_*.txt'.format(config['date'])))
 
     print('Total files in the directory: ' + str(len(files)) + ' files')
 
@@ -187,12 +194,12 @@ def txt2hdf5_mudis(config, init_file=0,
         ElectrTemp = int(dat[9][23:-1])
 
         # Create the directory to save the results
-        os.makedirs(os.path.dirname(config['str_dir'] + 'radiance/{}/data/').format(config['date']),
+        os.makedirs(os.path.dirname(config['str_dir'] + '/radiance/{}/data/').format(config['date']),
                     exist_ok=True)
 
         if exposure == expo:
             # Create a file in the disk
-            with h5py.File(config['str_dir'] + 'radiance/{}/data/{}.h5'.format(config['date'], new_name),
+            with h5py.File(config['str_dir'] + '/radiance/{}/data/{}.h5'.format(config['date'], new_name),
                               'w') as datos:
 
                 if not list(datos.items()):
@@ -248,29 +255,29 @@ def loadhdf5file(file_h5, key='data'):
 
     return info_value, info_attrs
 
-
-def dark_correction(dark_file, alignment, config):
-    """
-    Calculate the dark current in the measurements
-    """
+@jit
+def dark(config):
+    """Calculate the dark current in the measurements """
 
     # -----------DARK CURRENT----------------------
+    files = sorted(glob.glob(config['raw_dir'] + '/radiance/{}/dark/dark_*.txt'.format(config['date'])))
     # Import the data from the file
-    dark = np.genfromtxt(dark_file[0], delimiter='', skip_header=11)
+    dark_file = np.genfromtxt(files[0], delimiter='', skip_header=11)
 
     # Create array to save data
-    dark = np.zeros(list(dark.shape))
+    dark = np.zeros(list(dark_file.shape))
 
     print('Calculating...')
-
+    cnt = 0
     # Calculate mean of dark files
-    for i in np.arange(len(dark_file)):
-        dark += np.genfromtxt(dark_file[i], delimiter='', skip_header=11)
-
-    dark = dark / (i + 1)
+    for i in np.arange(len(files)):
+        dark += np.genfromtxt(files[i], delimiter='', skip_header=11)
+        cnt += 1
+    dark = dark / (cnt + 1)
 
     # create the radiance matrix
     dark_current = np.zeros([113, 992])
+    alignment = add_align()
 
     for i in np.arange(113):
         if str(alignment.iloc[i][3]) == 'nan':
@@ -282,6 +289,37 @@ def dark_correction(dark_file, alignment, config):
 
     return dark_current
 
+
+def dark_correction(config, init_file=0, final_file=1):
+    """Dark correction of radiance h5 files"""
+
+    # Import the radiance data from sensor
+    files = sorted(glob.glob(config['str_dir'] + '/radiance/{}/data/*.h5'.
+                             format(config['date'])))
+
+    print('Total files in the directory: ' + str(len(files)) + ' files')
+
+    ans = input('convert all files (y/n): ')
+
+    if ans == 'n':
+        print('configure initial and final file index in the function options')
+    else:
+        init_file = 0
+        final_file = len(files)
+    # dark current
+    dark_current = dark(config)
+
+    for fil in np.arange(init_file, final_file):
+
+        with h5py.File(files[fil], 'r+') as data:
+            radiance = data['data']
+            radiance_dark = radiance - dark_current
+            data['data'][...] =  radiance_dark
+
+        print('File ' + str(fil + init_file + 1) + ' of ' +
+              str((final_file - init_file)) + ' saved')
+    
+    print('completed')
 
 def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
     """
@@ -455,7 +493,7 @@ def radiance_map(file, config, vmax=4200, levels=20, typ=''):
 # --------SIMULATIONS RADIANCE-------------------
 def simulation_config(config):
     """ """
-    str_dir_radiance = sorted(glob.glob(config['str_dir'] + 'radiance/' +
+    str_dir_radiance = sorted(glob.glob(config['str_dir'] + '/radiance/' +
                                         config['date'] + '/data/' + '*.h5'))
     return str_dir_radiance
 
@@ -512,13 +550,13 @@ def simulate_UVSPEC(file, config):
         file.writelines(data)
 
     # Create the directory to save the results
-    os.makedirs(os.path.dirname(config['str_dir'] + 'simulation/' + '{}/{}nm/txt_files/'.format(time_n[0:8],
+    os.makedirs(os.path.dirname(config['str_dir'] + '/simulation/' + '{}/{}nm/txt_files/'.format(time_n[0:8],
                                                               wavelength)),
                 exist_ok=True)
 
     # Run the program UVSPEC in the terminal
     os.system(config['UVSPEC_path'] + 'uvspec < ' + config['personal_libraries'] +
-              'MUDIS_HDF5/MUDIS_radiance_Input.txt>   ' + config['str_dir'] + 'simulation/' +
+              'MUDIS_HDF5/MUDIS_radiance_Input.txt>   ' + config['str_dir'] + '/simulation/' +
               '{}/{}nm/txt_files/'.format(time_n[0:8], wavelength) + time_n +
               '.txt')
 
@@ -587,13 +625,13 @@ def export_sim_rad(file, config):
     # Create the directory to save the results
     os.makedirs(os.path.dirname(
         config['str_dir'] +
-        'simulation/{}/{}nm/hdf5_files/'.format(date, config['wavelength'])),
+        '/simulation/{}/{}nm/hdf5_files/'.format(date, config['wavelength'])),
                 exist_ok=True)
 
     # Save simulated data information
     simulated = h5py.File(config['str_dir'] +
-                          'simulation/{}/{}nm/hdf5_files/{}_simulated_radian\n'
-                          'ce.h5'.format(date, config['wavelength'], time_n),
+                          '/simulation/{}/{}nm/hdf5_files/{}_simulated_radiance.h5'.
+                          format(date, config['wavelength'], time_n),
                           'w')
 
     if not list(simulated.items()):
@@ -611,6 +649,7 @@ def export_sim_rad(file, config):
     #print('Data of simulation were saved')
     return sim_data
 
+
 def load_skymap(config):
     """ Load skymap of MUDIS"""
     cwd = os.getcwd()
@@ -625,7 +664,7 @@ def load_skymap(config):
 
 def files_sim(config):
     """ """
-    file_sim = sorted(glob.glob(config['str_dir'] + 'simulation/' +
+    file_sim = sorted(glob.glob(config['str_dir'] + '/simulation/' +
                                 '{}/{}nm/txt_files/*.txt'.format(
                                 config['date'], config['wavelength'])))
     return file_sim

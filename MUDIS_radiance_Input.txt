@@ -15,8 +15,8 @@ altitude 0.065           # Station altitude
 day_of_year 131  
 wavelength  500   500  #  wavelength to calcule [nm] 
 
-sza  55.352       # Solar zenith angle 
-phi0  106.415      #Azimuth angle with zenith position 
+sza  34.474       # Solar zenith angle 
+phi0  174.874      #Azimuth angle with zenith position 
 
 mol_modify O3 351. DU  # Ozone value
 
