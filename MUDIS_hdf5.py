@@ -15,37 +15,79 @@ import scipy.interpolate
 cwd = os.getcwd()
 
 def create_str_dir(config):
-    """Create the structured file directory to save the h5 files, in the path
+    """Create the structured file directory to save the hdf5 files, in the path
     defined in the parameter str_dir"""
 
     # radiance directory
-    os.makedirs(os.path.dirname(config['str_dir'] + 'radiance/'), exist_ok=True)
+    os.makedirs(os.path.dirname(config['str_dir'] + '/radiance/'), exist_ok=True)
     # allsky images directory
-    os.makedirs(os.path.dirname(config['str_dir'] + 'allsky/'), exist_ok=True)
+    os.makedirs(os.path.dirname(config['str_dir'] + '/allsky/'), exist_ok=True)
     # simulation directory
-    os.makedirs(os.path.dirname(config['str_dir'] + 'simulation/'), exist_ok=True)
+    os.makedirs(os.path.dirname(config['str_dir'] + '/simulation/'), exist_ok=True)
+
 
 def add_skymap(config):
-
+    """Load skymap to the notebook"""
     try:
         with h5py.File(cwd + '/config_files/skymap_radiance.h5', 'r') as sky:
             config['skymap'] = sky['skymap'][:]
-
     except:
         print('Run txt2hdf5_mudis to create skymap file')
+        
 
 def configuration(config):
-    """ Apply all configurations for the analysis"""
+    """ Apply all configurations for the analysis and the folder"""
     create_str_dir(config)
     add_skymap(config)
+    
 
+def fiber_alignment(config, ind=0):
+    """Function shows the fiber alignment along the sensor pixels"""
+    files = sorted(
+        glob.glob(config['raw_dir'] + '/radiance/{}/data/data_*.txt'.format(
+            config['date'])))
+
+    # load data from txt file
+    txt = np.genfromtxt(files[ind], delimiter='', skip_header=11)
+
+    align = add_align()
+
+    # extract pixels of alignment
+    pixels = align['pixel'] + config['channel_pixel_adj']
+
+    plt.subplot(221)
+    plt.plot(txt[500, :], '-*')
+    plt.axis([0, 1060, 0, txt[500, :].max() + 20])
+    for xc in pixels:
+        plt.axvline(x=xc, color='r')
+        
+    #plt.show()
+    plt.subplot(223)
+    # First section
+    plt.plot(txt[500, :], '-*')
+    plt.axis([0, 200, 0, txt[500, :].max() + 20])
+    for xc in pixels:
+        plt.axvline(x=xc, color='r')
+    plt.show()
+    plt.close()
+
+    plt.subplot(224)
+    # final section
+    plt.plot(txt[500, :], '-*')
+    plt.axis([800, 1060, 0, txt[500, :].max() + 20])
+    for xc in pixels:
+        plt.axvline(x=xc, color='r')
+    plt.show()
+    
 
 def nc_to_hdf5_mudis(config):
-    """Rearrange data from IDL MUDIS radiance nc files to hdf5 structure"""
+    """Rearrange data from IDL MUDIS radiance nc files to hdf5 structured files
+    used for the data processing"""
 
     # Create the directory to save the results
-    os.makedirs(os.path.dirname(config['path_MUDIS_hdf'] + '{}/data/').format(config['date']),
-                exist_ok=True)
+    path = config['str_dir'] + '/radiance/{}/data/'.format(config['date'])
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    
 
     if int(exposure) == int(expo):
         # Create a file in the disk
@@ -89,12 +131,11 @@ def nc_to_hdf5_mudis(config):
 
 def add_align():
     """Read alignment file in the configuration folder"""
-    
     try:
         alignment = pd.read_table(cwd + '/config_files/Alignment_Lab_UV_20120822.dat',
         sep='\s+',
-        names=['Channel Number', 'Azimuth', 'Zenith', 'pixel', 'pixel',
-               'pixel'], skiprows=1)
+        names=['Channel Number', 'Azimuth', 'Zenith', 'pixel', 'pixel2',
+               'pixel3'], skiprows=1)
     except ValueError:
         print("Add alignment file in folder '~./config_files/'. The alignment file\n"
               "must beginning with 'Alignment_' ")
@@ -103,7 +144,6 @@ def add_align():
 
 
 def txt2hdf5_mudis(config, init_file=0, final_file=100, step=1, expo='100'):
-
     """Convert raw data from MUDIS .txt file to hdf5 file with
     attributes.
     Parameters
@@ -147,7 +187,7 @@ def txt2hdf5_mudis(config, init_file=0, final_file=100, step=1, expo='100'):
 
     print('Total files in the directory: ' + str(len(files)) + ' files')
 
-    ans = input('convert all files (y/n): ')
+    ans = input('convert all files? (y/n): ')
 
     if ans == 'n':
         print('configure initial and final file index in the function options')
@@ -167,8 +207,10 @@ def txt2hdf5_mudis(config, init_file=0, final_file=100, step=1, expo='100'):
             if str(alignment.iloc[i][3]) == 'nan':
                 data[i] = np.nan
             else:
-                data[i] = file[:, int(
-                    alignment.iloc[i][3] + config['channel_pixel_adj'])]  #
+                try:
+                    data[i] = file[:, int(alignment.iloc[i][3] + config['channel_pixel_adj'])]  #
+                except:
+                    pass  #
                 # read the pixels index
                 # in the alignment file and copy the
                 # data in the radiance matrix']))
@@ -318,7 +360,6 @@ def dark_correction(config, init_file=0, final_file=1):
 
         print('File ' + str(fil + init_file + 1) + ' of ' +
               str((final_file - init_file)) + ' saved')
-    
     print('completed')
 
 def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
@@ -392,12 +433,11 @@ def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
 
     return wave
 
-def radiance_map(file, config, vmax=4200, levels=20, typ=''):
 
-    # Select data from DataFrame
+def radiance_map(file, config, vmax=4200, levels=20, typ=''):
+    # Select data from configuration 
     azimuths = config['skymap'][:, 0]  # +180  # azimuths
     zeniths = config['skymap'][:, 1]  # zeniths
-
 
     if typ == 'sim':
         # look for wavelength index in array
@@ -575,8 +615,6 @@ def export_sim_rad(file, config):
 
     Last modification(2017.05.24) """
 
-    # os.makedirs(os.path.dirname(path + 'Formatted_data/Simulated/%snm/')
-    #             % wavelength, exist_ok=True)
     data = np.genfromtxt(file, delimiter='')
     # source dir is the directory
     source_dir = config['personal_libraries'] + "MUDIS_HDF5/MUDIS_config/"
@@ -645,8 +683,7 @@ def export_sim_rad(file, config):
     simulated['/simulated'].attrs['Time'] = time_n
 
     simulated.close()
-
-    #print('Data of simulation were saved')
+    
     return sim_data
 
 
@@ -663,7 +700,7 @@ def load_skymap(config):
 
 
 def files_sim(config):
-    """ """
+    """Return directory of simulated txt files """
     file_sim = sorted(glob.glob(config['str_dir'] + '/simulation/' +
                                 '{}/{}nm/txt_files/*.txt'.format(
                                 config['date'], config['wavelength'])))
@@ -671,7 +708,7 @@ def files_sim(config):
 
 
 def simul_and_export(file, config, i):
-    """ Simulate and save the data in h5 file"""
+    """ Simulate and save the data in hdf5 file"""
 
     simulate_UVSPEC(file, config)
 

@@ -262,7 +262,6 @@ def fov_save(config, zen='', cosk='',
 # ----------------------------------------------
 # Classes of library
 
-
 class ASImage(object):
 
     aoi = 1000
@@ -540,25 +539,25 @@ class ASImage(object):
             if 'cloud_cover' in list(cloud.keys()):
                 del cloud['cloud_cover']
 
-                cloud.create_dataset('/cloud_cover', data=cloud_cover)
+                cloud.create_dataset('/cloud_cover', data=cloud_cover, dtype='f4')
                 cloud['/cloud_cover'].attrs['Units'] = 'Fraction'
                 cloud['/cloud_cover'].attrs[
                     'Columns'] = 'Channel, Cloud cover'
             else:
                 # data = cloud_c['cloud_cover']
                 # data[...] = cloud_cover
-                cloud.create_dataset('/cloud_cover', data=cloud_cover)
+                cloud.create_dataset('/cloud_cover', data=cloud_cover, dtype='f4')
                 cloud['/cloud_cover'].attrs['Units'] = 'Fraction'
                 cloud['/cloud_cover'].attrs[
                     'Columns'] = 'Channel, Cloud cover'
 
             if 'brightness' in list(cloud.keys()):
                 del cloud['brightness']
-                cloud.create_dataset('/brightness', data=brightness)
+                cloud.create_dataset('/brightness', data=brightness, dtype='f4')
                 cloud['/brightness'].attrs['Units'] = 'Intensity pixels'
                 cloud['brightness'].attrs['Columns'] = 'Channel, Brightness'
             else:
-                cloud.create_dataset('/brightness', data=brightness)
+                cloud.create_dataset('/brightness', data=brightness, dtype='f4')
                 cloud['/brightness'].attrs['Units'] = 'Intensity pixels'
                 cloud['brightness'].attrs['Columns'] = 'Channel, Brightness'
 
