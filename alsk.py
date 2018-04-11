@@ -1,6 +1,7 @@
 import datetime
 import h5py
 from numba import jit
+from matplotlib import colors
 import numpy as np
 import os
 from PIL import Image as pilmg
@@ -334,7 +335,7 @@ class ASImage(object):
         return image_filtered
 
     def north_plot(self, zen='', cosk=''):
-        """ plot a circle in the allky image. The aligment can be found 
+        """ plot a circle in the allky image. The aligment can be found
         changing the value in the config['nord_desv'] parameter"""
         zenith = 80
         azi = 0
