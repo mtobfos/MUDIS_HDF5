@@ -1,15 +1,11 @@
-import glob
 import datetime
 import h5py
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors # s
-from numba import jit, vectorize
+from numba import jit
 import numpy as np
 import os
 from PIL import Image as pilmg
 from Pysolar import solar as ps
 import scipy.misc
-import sys
 
 # ----------------------------------------------------------------------------
 # Functions which can be compiled with numba.jit. It is faster than another
@@ -33,7 +29,7 @@ def circle_aoi(image, aoi, radio_image):
 
 def crop_image(img):
     """
-    Crop the image to a effective work area defined by area-of-interest(aoi)
+    Crop the image to an effective work area defined by area-of-interest(aoi)
 
     """
 
@@ -264,9 +260,9 @@ def fov_save(config, zen='', cosk='',
 
 class ASImage(object):
 
-    aoi = 1000
-    cx = 1676
-    cy = 2178
+    aoi = 1050
+    cx = 1675
+    cy = 2270
     radio_image = 1082
 
     def __init__(self, file, config):
@@ -329,7 +325,21 @@ class ASImage(object):
               "\nZenith: {:5.1f}".format(zenith))
 
         # calculate position of zenith and azimuth over the image
-        image_filtered = hemispherical_circle_3D_to_2D(fov=14,
+        image_filtered = hemispherical_circle_3D_to_2D(fov=3,
+                                                       zen_direction=zenith,
+                                                       azim_direction=azi + int(self.config['nord_desv']),
+                                                       zen=zen,
+                                                       cosk=cosk,
+                                                       image=self.image)
+        return image_filtered
+
+    def north_plot(self, zen='', cosk=''):
+        """ plot a circle in the allky image. The aligment can be found 
+        changing the value in the config['nord_desv'] parameter"""
+        zenith = 80
+        azi = 0
+        # calculate position of zenith and azimuth over the image
+        image_filtered = hemispherical_circle_3D_to_2D(fov=4,
                                                        zen_direction=zenith,
                                                        azim_direction=azi + int(self.config['nord_desv']),
                                                        zen=zen,
@@ -434,7 +444,6 @@ class ASImage(object):
         scipy.misc.imsave(
             self.config['path_save_img'] + '{}/{}_UTC+0{}_filtered.png'.format(
                 name, full_name, utc), filtered)
-
 
         # ---- cloud cover information----------
 

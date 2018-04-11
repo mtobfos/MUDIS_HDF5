@@ -6,6 +6,7 @@ import netCDF4 as nc
 from numba import jit 
 import numpy as np
 import pandas as pd
+import pickle
 from Pysolar import solar as ps
 import os
 import xarray as xr
@@ -39,7 +40,14 @@ def configuration(config):
     """ Apply all configurations for the analysis and the folder"""
     create_str_dir(config)
     add_skymap(config)
+    save_configuration(config)
     
+    
+def save_configuration(config):
+    """save configuration to pc in the current work directory"""
+    with open(cwd + '/configuration.pickle', 'wb') as handle:
+        pickle.dump(config, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 def fiber_alignment(config, ind=0):
     """Function shows the fiber alignment along the sensor pixels"""
@@ -55,78 +63,108 @@ def fiber_alignment(config, ind=0):
     # extract pixels of alignment
     pixels = align['pixel'] + config['channel_pixel_adj']
 
-    plt.subplot(221)
-    plt.plot(txt[500, :], '-*')
-    plt.axis([0, 1060, 0, txt[500, :].max() + 20])
-    for xc in pixels:
-        plt.axvline(x=xc, color='r')
-        
-    #plt.show()
-    plt.subplot(223)
-    # First section
-    plt.plot(txt[500, :], '-*')
-    plt.axis([0, 200, 0, txt[500, :].max() + 20])
-    for xc in pixels:
-        plt.axvline(x=xc, color='r')
-    plt.show()
-    plt.close()
+    plt.figure(figsize=(12, 9), dpi=300)
 
-    plt.subplot(224)
-    # final section
-    plt.plot(txt[500, :], '-*')
-    plt.axis([800, 1060, 0, txt[500, :].max() + 20])
+    ax1 = plt.subplot2grid((2, 4), (0, 0), colspan=4)
+    ax1.plot(txt[500, :], '-*')
+    ax1.axis([0, 1060, 0, txt[500, :].max() + 20])
     for xc in pixels:
         plt.axvline(x=xc, color='r')
-    plt.show()
+    plt.xlabel('pixels')
+    plt.ylabel('counts')
+    plt.title('Channel alignment')
     
+    ax2 = plt.subplot2grid((2, 4), (1, 0), colspan=2)
+    # First section
+    ax2.plot(txt[500, :], '-*')
+    ax2.axis([0, 200, 0, txt[500, :].max() + 20])
+    for xc in pixels:
+        plt.axvline(x=xc, color='r')
+    plt.xlabel('pixels')
+    plt.ylabel('counts')
+    plt.title('Initial section')
 
-def nc_to_hdf5_mudis(config):
+    ax3 = plt.subplot2grid((2, 4), (1, 2), colspan=2)
+    # final section
+    ax3.plot(txt[500, :], '-*')
+    ax3.axis([800, 1060, 0, txt[500, :].max() + 20])
+    for xc in pixels:
+        plt.axvline(x=xc, color='r')
+    plt.xlabel('pixels')
+    plt.ylabel('counts')
+    plt.title('Final section')
+
+    plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+    plt.show()
+
+
+def nc_to_hdf5_mudis(dataset, config):
     """Rearrange data from IDL MUDIS radiance nc files to hdf5 structured files
     used for the data processing"""
+    np.warnings.filterwarnings('ignore')
+
+    date = datetime.datetime.strptime(dataset.recorddate,
+                                      '%d.%m.%Y')  # read date from dateset
+    date_name = datetime.datetime.strftime(date,
+                                           '%Y%m%d')  # convert date to YYYYMMDD format
+    config['date'] = date_name
 
     # Create the directory to save the results
     path = config['str_dir'] + '/radiance/{}/data/'.format(config['date'])
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    
 
-    if int(exposure) == int(expo):
-        # Create a file in the disk
-        with h5py.File(config['path_MUDIS_hdf'] + date + '/data/' + new_name + '.h5', 'w') as datos:
+    # Read time of the file (correct time)
+    time = datetime.datetime.strptime(dataset.recordtime, '%H:%M:%S.')
+    time = datetime.datetime.time(time)
 
-            if not list(datos.items()):
-                # Create two datasets(use only one time)
-                datos.create_dataset('/data', data=data, dtype='f4')
-                datos.create_dataset('/skymap', data=skymap, dtype='f4')
-            else:
-                del datos['data']
-                del datos['skymap']
-                print('data deleted and corrected')
-                datos.create_dataset('/data', data=data, dtype='f4')
-                datos.create_dataset('/skymap', data=skymap, dtype='f4')
+    # convert time to datetime format
+    datetime_name = datetime.datetime.combine(date, time)
+    new_name = datetime.datetime.strftime(datetime_name, '%Y%m%d_%H%M%S')
 
-            # Add attributes to datasets
-            datos['data'].attrs['time'] = str(time)
-            datos['data'].attrs['Exposure'] = exposure
-            datos['data'].attrs['NumAver'] = NumAve
-            datos['data'].attrs['CCDTemp'] = CCDTemp
-            datos['data'].attrs['NumSingMes'] = NumSingMes
-            datos['data'].attrs['ElectrTemp'] = ElectrTemp
-            datos['data'].attrs['Latitude'] = '52.39N'
-            datos['data'].attrs['Longitude'] = '9.7E'
-            datos['data'].attrs['Altitude'] = '65 AMSL'
+    # radiance = dataset.variables['data'][:].reshape(113, 1281)
+    # wavelength_axis = dataset.variables['xAxis'][:]
 
-            chn = np.arange(1, 114)
-            datos.create_dataset('/channel', data=chn, dtype=np.float32)
+    # Create a file in the disk
+    with h5py.File(config['str_dir'] + '/radiance/{}/data/{}.h5'.format(
+            config['date'], new_name), 'w') as datos:
 
-            datos['data'].dims.create_scale(datos['channel'], 'channel')
-            datos['data'].dims[0].attach_scale(datos['channel'])
-            datos['data'].dims[0].label = 'channel'
-            datos['data'].dims[1].label = 'wavelength'
+        if not list(datos.items()):
+            # Create two datasets(use only one time)
+            datos.create_dataset('/data',
+                                 data=dataset['data'][:].reshape(113, 1281),
+                                 dtype='f4')
+            # datos.create_dataset('/skymap', data=skymap, dtype='f4')
+        else:
+            del datos['data']
+            # del datos['skymap']
+            print('data deleted and corrected')
+            datos.create_dataset('/data', data=data, dtype='f4')
+            # datos.create_dataset('/skymap', data=skymap, dtype='f4')
 
-            datos['skymap'].dims[0].label = 'channel'
-            datos['skymap'].dims[1].label = 'Azimuth, Zenith'
+        # Add attributes to datasets
+        datos['data'].attrs['time'] = str(time)
+        datos['data'].attrs['Exposure'] = dataset.exposuretime
+        datos['data'].attrs['NumAver'] = dataset.AVERAGED
+        datos['data'].attrs['CCDTemp'] = dataset.detectortemperature
+        datos['data'].attrs['NumSingMes'] = dataset.noofaccumulations
+        # datos['data'].attrs['ElectrTemp'] = dataset.
+        datos['data'].attrs['Latitude'] = '52.39N'
+        datos['data'].attrs['Longitude'] = '9.7E'
+        datos['data'].attrs['Altitude'] = '65 AMSL'
 
-            datos.close()
+        chn = np.arange(1, 114)
+        datos.create_dataset('/channel', data=chn, dtype=np.float32)
+        datos.create_dataset('/wavelength', data=dataset['xAxis'][:])
+
+        datos['data'].dims.create_scale(datos['channel'], 'channel')
+        datos['data'].dims[0].attach_scale(datos['channel'])
+        datos['data'].dims[0].label = 'channel'
+        datos['data'].dims[1].label = 'wavelength'
+
+        #    datos['skymap'].dims[0].label = 'channel'
+        #    datos['skymap'].dims[1].label = 'Azimuth, Zenith'
+
+        datos.close()
 
 
 def add_align():
@@ -333,7 +371,8 @@ def dark(config):
 
 
 def dark_correction(config, init_file=0, final_file=1):
-    """Dark correction of radiance h5 files"""
+    """Dark correction of radiance h5 files. Modifies the original
+    HDF5, use only one time"""
 
     # Import the radiance data from sensor
     files = sorted(glob.glob(config['str_dir'] + '/radiance/{}/data/*.h5'.
@@ -341,7 +380,7 @@ def dark_correction(config, init_file=0, final_file=1):
 
     print('Total files in the directory: ' + str(len(files)) + ' files')
 
-    ans = input('convert all files (y/n): ')
+    ans = input('correct all files to dark (y/n): ')
 
     if ans == 'n':
         print('configure initial and final file index in the function options')
@@ -361,6 +400,7 @@ def dark_correction(config, init_file=0, final_file=1):
         print('File ' + str(fil + init_file + 1) + ' of ' +
               str((final_file - init_file)) + ' saved')
     print('completed')
+
 
 def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
     """
@@ -415,7 +455,7 @@ def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
 
     # ----MANUAL DISPLACEMENT------
     for i in np.arange(len(wave)):
-        wave[i] = 250 + i * 0.446 + correction
+        wave[i] = 250 + i * 0.3226 + correction
 
     # Import wave file and plot the data
     # wave_data = np.genfromtxt(wave_files, delimiter='', skip_header=11)
@@ -435,14 +475,16 @@ def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
 
 
 def radiance_map(file, config, vmax=4200, levels=20, typ=''):
+    """Plot radiance distribution from hdf5 files.
+    Unter development"""
+    
     # Select data from configuration 
     azimuths = config['skymap'][:, 0]  # +180  # azimuths
     zeniths = config['skymap'][:, 1]  # zeniths
 
     if typ == 'sim':
         # look for wavelength index in array
-        waves_sim = \
-        dataset.attrs['simulated_Columns'].split('nm')[0].split('[')[1].split(
+        waves_sim = dataset.attrs['simulated_Columns'].split('nm')[0].split('[')[1].split(
             ']')[0].split(',')
         waves = np.asarray(list(map(int, waves_sim)))
         wave_indx = np.where(waves == wave)
