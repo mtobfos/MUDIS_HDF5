@@ -14,61 +14,26 @@ import scipy.misc
 # ----------------------------------------------------------------------------
 
 
-def filter_aoi(image):
-    """
-    Crop a image with the area-of-interest- defined in the image parameter
-    """
-    # create a grid of coordinates pixel position
-    xx, yy = np.mgrid[:2 * ASImage.radio_image, :2 * ASImage.radio_image]
-    # mask a circle using the grid
-    mask = (xx - ASImage.radio_image) ** 2 + (yy - ASImage.radio_image) ** 2
-    # evaluate the circle position using the aoi as radius
-    area = np.logical_and(mask < (ASImage.aoi ** 2), mask >= 0)
-    # crop image
-    img_crop = image[ASImage.cx - ASImage.radio_image:ASImage.cx + ASImage.radio_image,
-               ASImage.cy - ASImage.radio_image:ASImage.cy + ASImage.radio_image, :]
-
-    filtered = np.zeros([2 * ASImage.radio_image, 2 * ASImage.radio_image, 3], dtype='uint8')
-
-    filtered[..., 0] = img_crop[..., 0] * area
-    filtered[..., 1] = img_crop[..., 1] * area
-    filtered[..., 2] = img_crop[..., 2] * area
-
-    return filtered
-
-
-@jit(nogil=True)
 def circle_aoi(image, aoi, radio_image):
     """
-    Change values of pixels to 255 out of aoi pixels.
-    """
-    for j in np.arange(len(image)):
-        for i in np.arange(len(image)):
-            if aoi ** 2 <= ((i - radio_image) ** 2 + (j - radio_image) ** 2):
-                image[i, j] = 0, 0, 0
-            else:
-                pass
-    return image
+    Crop a image with the area-of-interest- defined in the image parameter. The
+    cropped images is imported in the init method
+     """
+    # create a grid of coordinates pixel position
+    xx, yy = np.mgrid[:2 * radio_image, :2 * radio_image]
+    # mask a circle using the grid
+    mask = (xx - radio_image) ** 2 + (yy - radio_image) ** 2
+    # evaluate the circle position using the aoi as radius
+    area = np.logical_and(mask < (aoi ** 2), mask >= 0)
 
+    img = np.zeros([len(image), len(image), 3], dtype='uint8')
+    
+    img[..., 0] = image[..., 0] * area
+    img[..., 1] = image[..., 1] * area
+    img[..., 2] = image[..., 2] * area
+    
+    return img
 
-def crop_image(img):
-    """
-    Crop the image to an effective work area defined by area-of-interest(aoi)
-
-    """
-
-    x_ran, x_ran1 = ASImage.cx - ASImage.radio_image, ASImage.cx + ASImage.radio_image
-    y_ran, y_ran1 = ASImage.cy - ASImage.radio_image, ASImage.cy + ASImage.radio_image
-
-    image_cropped = np.zeros([2 * ASImage.radio_image, 2 * ASImage.radio_image, 3], dtype='uint8')  # use for images unit8 type
-
-    image_cropped[:(x_ran1 - x_ran), :(y_ran1 - y_ran), 0] = img[x_ran:x_ran1, y_ran:y_ran1, 0]  # red
-    image_cropped[:(x_ran1 - x_ran), :(y_ran1 - y_ran), 1] = img[x_ran:x_ran1, y_ran:y_ran1, 1]  # green
-    image_cropped[:(x_ran1 - x_ran), :(y_ran1 - y_ran), 2] = img[x_ran:x_ran1, y_ran:y_ran1, 2]  # blue
-
-    result = circle_aoi(image_cropped, ASImage.aoi, ASImage.radio_image)
-
-    return result
 
 ##############################################################################
 # HEMISPHERICAL FOV
@@ -193,8 +158,8 @@ def hemispherical_circle_3D_to_2D(fov=9, zen_direction=0, azim_direction=0,
     circle_array[ab_klgl_FOV[:, 0], ab_klgl_FOV[:, 1]] = 1.1
 
     # Delete values out the image area
-    #circle_aoi(circle_array, ASImage.aoi, ASImage.radio_image)
-
+    circle_aoi(circle_array, ASImage.aoi, ASImage.radio_image)
+    
     return circle_array
 
 
@@ -265,9 +230,13 @@ def fov_save(config, zen='', cosk='',
 # ----------------------------------------------
 # Classes of library
 
-class ASImage(object):
 
-    aoi = 1050
+class ASImage(object):
+    """
+    Class used for work with allsky images
+    """
+
+    aoi = 1000
     cx = 1675
     cy = 2270
     radio_image = 1082
@@ -275,12 +244,39 @@ class ASImage(object):
     def __init__(self, file, config):
         self.file = file
         self.config = config
-        self.image = crop_image(np.asarray(pilmg.open(self.file, mode='r'), dtype='uint8'))
+        self.image = self.crop_import(np.asarray(pilmg.open(self.file,
+                                                        mode='r'), dtype='uint8'))
+    @staticmethod
+    def crop_import(image):
+        """
+        Crop the readed image in the _init_ method. Only used for _init_method
 
+        """
+        # create a grid of coordinates pixel position
+        xx, yy = np.mgrid[:2 * ASImage.radio_image, :2 * ASImage.radio_image]
+        # mask a circle using the grid
+        mask = (xx - ASImage.radio_image) ** 2 + (
+                    yy - ASImage.radio_image) ** 2
+        # evaluate the circle position using the aoi as radius
+        area = np.logical_and(mask < (ASImage.aoi ** 2), mask >= 0)
+        # crop image
+        img_crop = image[ASImage.cx - ASImage.radio_image:ASImage.cx + ASImage.radio_image,
+                   ASImage.cy - ASImage.radio_image:ASImage.cy + ASImage.radio_image,
+                   :]
+
+        filtered = np.zeros([2 * ASImage.radio_image, 2 * ASImage.radio_image, 3],
+            dtype='uint8')
+
+        filtered[..., 0] = img_crop[..., 0] * area
+        filtered[..., 1] = img_crop[..., 1] * area
+        filtered[..., 2] = img_crop[..., 2] * area
+
+        return filtered
+        
     def datetime(self):
         """
-         Function returns the datetime and UTC information of the all-sky image
-         loaded in file
+         Function returns the datetime and UTC information of the all-sky
+         imagen loaded in file
         """
         date = os.path.split(self.file)
         # Variable to save the file name
@@ -298,7 +294,7 @@ class ASImage(object):
         sun position is determined by using of the function datetime.datetime() and
         mudis.hemispherical_circle_3D_to_2D()
 
-         IMAGE: Image cropped using the function mudis.crop_image()
+         IMAGE: Image cropped using the function alsk.filtered()
          DATE: parameter obtained from the name of the image. We need the local
                time, therefore we use a UTC of +2 for Hannover.
                :type utc: object
