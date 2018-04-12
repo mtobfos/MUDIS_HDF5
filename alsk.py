@@ -14,6 +14,29 @@ import scipy.misc
 # ----------------------------------------------------------------------------
 
 
+def filter_aoi(image):
+    """
+    Crop a image with the area-of-interest- defined in the image parameter
+    """
+    # create a grid of coordinates pixel position
+    xx, yy = np.mgrid[:2 * ASImage.radio_image, :2 * ASImage.radio_image]
+    # mask a circle using the grid
+    mask = (xx - ASImage.radio_image) ** 2 + (yy - ASImage.radio_image) ** 2
+    # evaluate the circle position using the aoi as radius
+    area = np.logical_and(mask < (ASImage.aoi ** 2), mask >= 0)
+    # crop image
+    img_crop = image[ASImage.cx - ASImage.radio_image:ASImage.cx + ASImage.radio_image,
+               ASImage.cy - ASImage.radio_image:ASImage.cy + ASImage.radio_image, :]
+
+    filtered = np.zeros([2 * ASImage.radio_image, 2 * ASImage.radio_image, 3], dtype='uint8')
+
+    filtered[..., 0] = img_crop[..., 0] * area
+    filtered[..., 1] = img_crop[..., 1] * area
+    filtered[..., 2] = img_crop[..., 2] * area
+
+    return filtered
+
+
 @jit(nogil=True)
 def circle_aoi(image, aoi, radio_image):
     """
@@ -45,22 +68,6 @@ def crop_image(img):
 
     result = circle_aoi(image_cropped, ASImage.aoi, ASImage.radio_image)
 
-    # # filter values out the circle
-    # len_array = np.arange(2164)
-    # pixels = np.meshgrid(len_array, len_array)
-    #
-    # # iterators values
-    # i = pixels[0]
-    # j = pixels[1]
-    #
-    # # mask
-    # mask = np.where((i - ASImage.radio_image) ** 2 + (j - ASImage.radio_image) ** 2 <= ASImage.aoi ** 2, True, False)
-    #
-    # # Apply mask to image
-    # image_cropped = image_cropped[:, :, 0] * mask, image_cropped[:, :, 1] * mask, image_cropped[:, :, 2] * mask
-    # image_cropped[:, :, 1] = image_cropped[:, :, 1] * mask
-    # image_cropped[:, :, 2] = image_cropped[:, :, 2] * mask
-    #print("Image cropped")
     return result
 
 ##############################################################################
@@ -134,10 +141,9 @@ def hemispherical_circle_3D_to_2D(fov=9, zen_direction=0, azim_direction=0,
     if image is None:
         circle_array = np.zeros(
             [2 * int(radio_image), 2 * int(radio_image)])
-        #print("no image used for calculation")
+
     else:
         circle_array = image
-        #print("image used for calculation")
 
     x_pos = RADIO_IMAGE - RADIO_IMAGE * np.cos(
         np.radians(azimu)) * zenith / 90
@@ -187,7 +193,7 @@ def hemispherical_circle_3D_to_2D(fov=9, zen_direction=0, azim_direction=0,
     circle_array[ab_klgl_FOV[:, 0], ab_klgl_FOV[:, 1]] = 1.1
 
     # Delete values out the image area
-    circle_aoi(circle_array, ASImage.aoi, ASImage.radio_image)
+    #circle_aoi(circle_array, ASImage.aoi, ASImage.radio_image)
 
     return circle_array
 
