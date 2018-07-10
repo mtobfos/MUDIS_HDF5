@@ -7,13 +7,16 @@ from numba import jit
 import numpy as np
 import pandas as pd
 import pickle
-from Pysolar import solar as ps
+from pysolar import solar as ps
 import os
+import shutil
+import time
 import xarray as xr
 import scipy.interpolate
 
 # ---------- ARRANGE FUNCTIONS------------
 cwd = os.getcwd()
+
 
 def create_str_dir(config):
     """Create the structured file directory to save the hdf5 files, in the path
@@ -47,6 +50,25 @@ def save_configuration(config):
     """save configuration to pc in the current work directory"""
     with open(cwd + '/configuration.pickle', 'wb') as handle:
         pickle.dump(config, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def validate_measurements(raw_directory, copied_directory, indexs=[0, 1]):
+    """read MUDIS raw data, if there are values equal to 4095, do not copy it
+    into another raw_directory. Used before calibration functions of IDL"""
+
+    files = sorted(glob.glob(raw_directory + '*.txt'))
+
+    for i in np.arange(indexs[0], indexs[1]):
+        file = np.genfromtxt(files[i], skip_header=11, dtype='f4', delimiter='')
+        print('max value: ', np.nanmax(file), i)
+        max_value = np.nanmax(file)
+
+        if max_value < 4095:
+            shutil.copy2(files[i], copied_directory)
+            time.sleep(1)
+        else:
+            print('no valid measurement')
+    print('completed')
 
 
 def fiber_alignment(config, ind=0):
@@ -101,6 +123,7 @@ def fiber_alignment(config, ind=0):
 def nc_to_hdf5_mudis(dataset, config):
     """Rearrange data from IDL MUDIS radiance nc files to hdf5 structured files
     used for the data processing"""
+    
     np.warnings.filterwarnings('ignore')
 
     date = datetime.datetime.strptime(dataset.recorddate,
@@ -402,7 +425,7 @@ def dark_correction(config, init_file=0, final_file=1):
     print('completed')
 
 
-def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
+def wave_correction(wave_files, alignment, config,  correction, dir_ind=5):
     """
     Function applies a correction in the wavelegth values of the CCD pixels
 
@@ -447,8 +470,8 @@ def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
                                           config['channel_pixel_adj'])]
 
     # Define Hg-Lamp emission lines
-    HgAr_lines = [253.7, 296.728, 302.2, 312.952, 334.148, 365.338, 404.657,
-                  435.834, 546.075, 576.96]
+    HgAr_lines = [253.65, 296.728, 302.15, 313.16, 334.148, 365.01, 404.657,
+                  435.834, 546.075, 576.96, 579.07]
 
     # Create the wavelength array for MUDIS
     wave = np.zeros(992)
@@ -459,11 +482,13 @@ def wave_correction(wave_files, alignment, config, correction, dir_ind=5):
 
     # Import wave file and plot the data
     # wave_data = np.genfromtxt(wave_files, delimiter='', skip_header=11)
+    plt.figure(figsize=(12, 9))
+
     plt.plot(wave, wave_data[dir_ind, :], 'b-')
 
     # Plot Hg Lines
     for ind in np.arange(len(HgAr_lines)):
-        plt.plot([HgAr_lines[ind], HgAr_lines[ind]], [0, 4000], 'r-')
+        plt.plot([HgAr_lines[ind], HgAr_lines[ind]], [0, 3000], 'r-')
 
     plt.title('Hg emission lines on CCD', fontsize=14)
     plt.xlabel('Wavelength[nm]', fontsize=13)

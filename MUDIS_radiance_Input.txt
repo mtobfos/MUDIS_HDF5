@@ -10,13 +10,13 @@ rte_solver disort        # Radiative transfer equation solver
 aerosol_default
 aerosol_visibility 16    # Sichtweite in km
 
-albedo 0.2              # Surface albedo
+albedo 0.02              # Surface albedo
 altitude 0.065           # Station altitude
 day_of_year 131  
 wavelength  500   500  #  wavelength to calcule [nm] 
 
 sza  34.474       # Solar zenith angle 
-phi0  174.874      #Azimuth angle with zenith position 
+phi0  174.874      # Azimuth angle with zenith position 
 
 mol_modify O3 351. DU  # Ozone value
 

@@ -1,17 +1,42 @@
 import datetime
+import glob
 import h5py
 from numba import jit
 from matplotlib import colors
 import numpy as np
 import os
+import PIL.Image
+import PIL.ExifTags
 from PIL import Image as pilmg
-from Pysolar import solar as ps
+from pysolar import solar as ps
 import scipy.misc
+import shutil
+import time
 
 # ----------------------------------------------------------------------------
 # Functions which can be compiled with numba.jit. It is faster than another
 # methods
 # ----------------------------------------------------------------------------
+
+
+def validate_measurements(raw_directory, copied_directory, indexs=[0, 1]):
+    """Read ALLSKY JPG metadata, if ExposureTime is different to 1/2000 ms, do
+    not copy it into another raw_directory"""
+
+    files = sorted(glob.glob(raw_directory + '*.JPG'))
+
+    for i in np.arange(indexs[0], indexs[1]):
+        img = PIL.Image.open(files[i])
+        exif = {PIL.ExifTags.TAGS[k]: v for k, v in img._getexif().items() if
+                k in PIL.ExifTags.TAGS}
+
+        if exif['ExposureTime'] == 2000:
+            shutil.copy2(files[i], copied_directory)
+            time.sleep(1)
+        else:
+            print('do not complain condition')
+            
+    print('completed')
 
 
 def circle_aoi(image, aoi, radio_image):
@@ -27,11 +52,11 @@ def circle_aoi(image, aoi, radio_image):
     area = np.logical_and(mask < (aoi ** 2), mask >= 0)
 
     img = np.zeros([len(image), len(image), 3], dtype='uint8')
-    
+
     img[..., 0] = image[..., 0] * area
     img[..., 1] = image[..., 1] * area
     img[..., 2] = image[..., 2] * area
-    
+
     return img
 
 
@@ -159,7 +184,7 @@ def hemispherical_circle_3D_to_2D(fov=9, zen_direction=0, azim_direction=0,
 
     # Delete values out the image area
     circle_aoi(circle_array, ASImage.aoi, ASImage.radio_image)
-    
+
     return circle_array
 
 
@@ -246,6 +271,7 @@ class ASImage(object):
         self.config = config
         self.image = self.crop_import(np.asarray(pilmg.open(self.file,
                                                         mode='r'), dtype='uint8'))
+
     @staticmethod
     def crop_import(image):
         """
@@ -272,7 +298,7 @@ class ASImage(object):
         filtered[..., 2] = img_crop[..., 2] * area
 
         return filtered
-        
+
     def datetime(self):
         """
          Function returns the datetime and UTC information of the all-sky
